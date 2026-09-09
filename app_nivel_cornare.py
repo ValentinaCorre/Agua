@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import urllib3
+import plotly.graph_objects as go
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -286,10 +287,11 @@ if consultar:
             # --- SECCIONES PESTAÑAS (TABS) ---
             tab_grafico, tab_mapa, tab_datos = st.tabs(["📈 Serie de Nivel Interactivas", "📍 Ubicación Geográfica", "📋 Datos Crudos y Exportación"])
 
-            # 1. PESTAÑA GRÁFICO PLOTLY
-            with tab_grafico:
-                st.subheader("Serie temporal de nivel de agua")
-                
+          # 1. PESTAÑA GRÁFICO NATIVO
+with tab_grafico:
+    st.subheader("Serie temporal de nivel de agua")
+    st.line_chart(df.set_index("fecha")["nivel"], color="#00D2FF")
+    
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     x=df["fecha"],
