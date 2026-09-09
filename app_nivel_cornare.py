@@ -292,15 +292,7 @@ with tab_grafico:
     st.subheader("Serie temporal de nivel de agua")
     st.line_chart(df.set_index("fecha")["nivel"], color="#00D2FF")
     
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=df["fecha"],
-                    y=df["nivel"],
-                    mode='lines',
-                    name='Nivel (cm)',
-                    line=dict(color='#00D2FF', width=2),
-                    fill='tozeroy',
-                    fillcolor='rgba(0, 210, 255, 0.08)'
+            
                 ))
 
                 fig.update_layout(
