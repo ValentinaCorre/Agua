@@ -1,28 +1,92 @@
 """
-App básica de Streamlit — Nivel de ríos/quebradas (CORNARE / MARCO)
---------------------------------------------------------------------
-Cada estudiante debe cambiar, como mínimo, el código de la estación
-en el sidebar. Los valores de fecha y calidad también son ajustables.
-
-Para correrla:
-    streamlit run app_nivel_cornare.py
+App de Streamlit — Monitoreo Hidrológico (CORNARE / MARCO)
+Versión Mejorada - Modo Oscuro & Dashboard Interactivo
 """
 
 import requests
 import pandas as pd
 import numpy as np
 import streamlit as st
+import plotly.graph_objects as go
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ------------------------------------------------------------------
-# Coordenadas por defecto (Institución Universitaria Pascual Bravo)
-# Se usan solo si la API no trae la latitud/longitud de la estación.
+# Configuración inicial de la página
+# ------------------------------------------------------------------
+st.set_page_config(
+    page_title="HidroSanCarlos - Monitoreo Ambiental",
+    page_icon="🌊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ------------------------------------------------------------------
+# Estilos CSS Personalizados (Modo Oscuro & Tarjetas)
+# ------------------------------------------------------------------
+st.markdown("""
+    <style>
+    /* Fondo principal */
+    .stApp {
+        background-color: #0E1117;
+        color: #E6EDF3;
+    }
+    
+    /* Estilo de la barra lateral */
+    [data-testid="stSidebar"] {
+        background-color: #161B22;
+        border-right: 1px solid #30363D;
+    }
+
+    /* Tarjetas de Métricas Personalizadas */
+    .metric-box {
+        background: #161B22;
+        border: 1px solid #30363D;
+        border-top: 4px solid #00D2FF;
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        margin-bottom: 10px;
+    }
+    .metric-title {
+        color: #8B949E;
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+    }
+    .metric-value {
+        color: #FFFFFF;
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    .metric-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-top: 4px;
+    }
+    .badge-good { background-color: rgba(46, 160, 67, 0.2); color: #3FB950; }
+    .badge-alert { background-color: rgba(248, 81, 73, 0.2); color: #F85149; }
+
+    /* Personalización del contenedor de imágenes */
+    .header-img {
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,210,255,0.2);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ------------------------------------------------------------------
+# Constantes y API
 # ------------------------------------------------------------------
 LAT_DEFECTO = 6.2766
 LON_DEFECTO = -75.5901
-
 API_BASE_URL = "https://marco.cornare.gov.co/api/v1/estaciones"
 
 LLAVE_FECHA = "level_date"
@@ -30,17 +94,15 @@ LLAVE_VALOR = "level"
 CANDIDATOS_LAT = ["lat", "latitude", "latitud"]
 CANDIDATOS_LON = ["lng", "lon", "longitude", "longitud"]
 
-st.set_page_config(page_title="Monitoreo Ambiental-San carlos", page_icon="🌊", layout="wide")
-
 
 # ------------------------------------------------------------------
-# Funciones de consulta
+# Funciones de consulta y procesamiento (Lógica Original Conservada)
 # ------------------------------------------------------------------
 def obtener_serie_nivel(codigo_estacion, desde, hasta, calidad=1, timeout=30):
     url = f"{API_BASE_URL}/{codigo_estacion}/nivel"
     params = {"desde": desde, "hasta": hasta, "calidad": calidad}
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "application/json, text/plain, */*",
     }
     try:
@@ -69,7 +131,6 @@ def obtener_todas_las_paginas(datos_json, timeout=30):
 
 
 def detectar_coordenadas(datos_json):
-    """Busca lat/lon en las llaves raíz de la respuesta. Si no las encuentra, usa el valor por defecto."""
     if not isinstance(datos_json, dict):
         return LAT_DEFECTO, LON_DEFECTO, False
 
@@ -85,7 +146,6 @@ def detectar_coordenadas(datos_json):
 
 
 def calcular_indice_calidad(df):
-    """Índice simple (0-100) combinando completitud de la serie y proporción de outliers."""
     if df.empty or len(df) < 2:
         return 0.0, 0, 0
 
@@ -111,34 +171,68 @@ def calcular_indice_calidad(df):
 
 
 # ------------------------------------------------------------------
-# Sidebar — parámetros de la consulta (editables por cada estudiante)
+# Sidebar — Parámetros de la consulta
 # ------------------------------------------------------------------
-st.sidebar.header("Parámetros de tu consulta")
-nombre_estudiante = st.sidebar.text_input("Nombre del estudiante", "Valentina Padilla")
-codigo_estacion = st.sidebar.text_input("Código de estación", "28")
-fecha_desde = st.sidebar.date_input("Desde", pd.to_datetime("2026-08-25")).strftime("%Y-%m-%d")
-fecha_hasta = st.sidebar.date_input("Hasta", pd.to_datetime("2026-08-31")).strftime("%Y-%m-%d")
-calidad = st.sidebar.selectbox("Calidad", [1, 0], index=0, help="1 = solo datos validados")
-consultar = st.sidebar.button("🔍 Consultar", type="primary")
+st.sidebar.markdown("## ⚙️ Parámetros")
+st.sidebar.caption("Ajusta los filtros para consultar la API de CORNARE.")
 
-st.title("🌊 HidroSanCarlos📈")
-st.caption(f"Estudiante: **{nombre_estudiante}** · Estación: **{codigo_estacion}**")
+nombre_estudiante = st.sidebar.text_input("👤 Nombre del estudiante", "Valentina Padilla")
+codigo_estacion = st.sidebar.text_input("📍 Código de estación", "28")
+
+col_d1, col_d2 = st.sidebar.columns(2)
+with col_d1:
+    fecha_desde = st.sidebar.date_input("📅 Desde", pd.to_datetime("2026-08-25")).strftime("%Y-%m-%d")
+with col_d2:
+    fecha_hasta = st.sidebar.date_input("📅 Hasta", pd.to_datetime("2026-08-31")).strftime("%Y-%m-%d")
+
+calidad = st.sidebar.selectbox("🛡️ Calidad de datos", [1, 0], index=0, help="1 = solo datos validados")
+
+consultar = st.sidebar.button("🔍 Consultar Datos", type="primary", use_container_width=True)
+
 
 # ------------------------------------------------------------------
-# Consulta y procesamiento
+# ENCABEZADO CON IMAGEN Y TÍTULO
+# ------------------------------------------------------------------
+col_head1, col_head2 = st.columns([3, 1])
+
+with col_head1:
+    st.title("🌊 HidroSanCarlos 📈")
+    st.markdown(f"""
+        <div style="background-color: #161B22; padding: 12px 18px; border-radius: 8px; border-left: 4px solid #00D2FF;">
+            <b>Estudiante:</b> {nombre_estudiante} &nbsp;|&nbsp; 
+            <b>Estación activa:</b> <span style="color:#00D2FF; font-weight:bold;">{codigo_estacion}</span> &nbsp;|&nbsp;
+            <b>Rango:</b> {fecha_desde} a {fecha_hasta}
+        </div>
+    """, unsafe_allow_html=True)
+
+with col_head2:
+    # AQUÍ PUEDES REEMPLAZAR LA URL POR LA RUTA LOCAL DE TU IMAGEN O LOGO
+    # Ejemplo con archivo local: st.image("logo_estacion.png", use_container_width=True)
+    st.image(
+        "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=500&q=80",
+        caption="Monitoreo Cuenca San Carlos",
+        use_container_width=True
+    )
+
+st.write("")
+
+
+# ------------------------------------------------------------------
+# CONSULTA Y PROCESAMIENTO
 # ------------------------------------------------------------------
 if consultar:
-    with st.spinner("Consultando la API..."):
+    with st.spinner("Conectando con la API de CORNARE/MARCO..."):
         datos_crudos, error = obtener_serie_nivel(codigo_estacion, fecha_desde, fecha_hasta, calidad)
 
     if error:
-        st.error(f"❌ {error}")
+        st.error(f"❌ Error al consultar la estación: {error}")
     else:
         registros = obtener_todas_las_paginas(datos_crudos)
 
         if not registros:
-            st.warning("No hay registros para esta estación y rango de fechas. Prueba otro código u otro rango.")
+            st.warning("⚠️ No se encontraron registros para esta estación en el rango seleccionado.")
         else:
+            # Construcción del DataFrame
             df = pd.DataFrame(registros)
             df = df.rename(columns={LLAVE_FECHA: "fecha", LLAVE_VALOR: "nivel"})
             df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
@@ -148,34 +242,112 @@ if consultar:
             lat, lon, coords_reales = detectar_coordenadas(datos_crudos)
             indice_calidad, huecos, n_outliers = calcular_indice_calidad(df)
 
-            # --- Métricas principales ---
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Lecturas", len(df))
-            col2.metric("Nivel promedio", f"{df['nivel'].mean():.2f}")
-            col3.metric("Índice de calidad", f"{indice_calidad} / 100")
-            col4.metric("Outliers detectados", n_outliers)
+            # --- TARJETAS KPI DE MÉTRICAS ---
+            m1, m2, m3, m4 = st.columns(4)
 
-            # --- Gráfico de la serie ---
-            st.subheader("Serie de nivel")
-            st.line_chart(df.set_index("fecha")["nivel"])
+            with m1:
+                st.markdown(f"""
+                    <div class="metric-box">
+                        <div class="metric-title">Lecturas Totales</div>
+                        <div class="metric-value">{len(df):,}</div>
+                        <div class="metric-badge badge-good">Registros OK</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-            # --- Mapa de la estación ---
-            st.subheader("Ubicación de la estación")
-            if not coords_reales:
-                st.caption("La API no trajo latitud/longitud de la estación — se muestra el punto de partida (Pascual Bravo). Ajusta `CANDIDATOS_LAT` / `CANDIDATOS_LON` si conoces el nombre real de esas llaves.")
-            st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}), zoom=10)
+            with m2:
+                st.markdown(f"""
+                    <div class="metric-box">
+                        <div class="metric-title">Nivel Promedio</div>
+                        <div class="metric-value">{df['nivel'].mean():.2f} <span style="font-size:0.9rem; color:#8B949E;">cm</span></div>
+                        <div class="metric-badge badge-good">Muestra estable</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-            # --- Detalle de calidad ---
-            with st.expander("Detalle del índice de calidad"):
-                st.write(f"- Huecos de reporte detectados: **{huecos}**")
-                st.write(f"- Outliers (IQR + nivel negativo): **{n_outliers}** de {len(df)} lecturas")
-                st.write("El índice combina completitud de la serie (70%) y proporción de datos sin outliers (30%).")
+            with m3:
+                badge_class = "badge-good" if indice_calidad >= 80 else "badge-alert"
+                st.markdown(f"""
+                    <div class="metric-box">
+                        <div class="metric-title">Índice de Calidad</div>
+                        <div class="metric-value">{indice_calidad} <span style="font-size:1rem; color:#8B949E;">/100</span></div>
+                        <div class="metric-badge {badge_class}">Confiabilidad</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-            # --- Tabla y descarga ---
-            with st.expander("Ver datos crudos"):
-                st.dataframe(df, use_container_width=True)
+            with m4:
+                st.markdown(f"""
+                    <div class="metric-box" style="border-top-color: #F85149;">
+                        <div class="metric-title">Outliers Detectados</div>
+                        <div class="metric-value" style="color: #F85149;">{n_outliers}</div>
+                        <div class="metric-badge badge-alert">{huecos} huecos en serie</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Descargar CSV", csv, file_name=f"nivel_estacion_{codigo_estacion}.csv", mime="text/csv")
+            st.write("")
+
+            # --- SECCIONES PESTAÑAS (TABS) ---
+            tab_grafico, tab_mapa, tab_datos = st.tabs(["📈 Serie de Nivel Interactivas", "📍 Ubicación Geográfica", "📋 Datos Crudos y Exportación"])
+
+            # 1. PESTAÑA GRÁFICO PLOTLY
+            with tab_grafico:
+                st.subheader("Serie temporal de nivel de agua")
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=df["fecha"],
+                    y=df["nivel"],
+                    mode='lines',
+                    name='Nivel (cm)',
+                    line=dict(color='#00D2FF', width=2),
+                    fill='tozeroy',
+                    fillcolor='rgba(0, 210, 255, 0.08)'
+                ))
+
+                fig.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="#161B22",
+                    height=450,
+                    margin=dict(l=20, r=20, t=30, b=20),
+                    hovermode="x unified",
+                    xaxis=dict(gridcolor="#21262D", showgrid=True),
+                    yaxis=dict(gridcolor="#21262D", title="Nivel (cm)", showgrid=True)
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            # 2. PESTAÑA MAPA
+            with tab_mapa:
+                st.subheader("Ubicación de la estación hidrológica")
+                if not coords_reales:
+                    st.info("ℹ️ Coordenadas por defecto (Pascual Bravo). La API no retornó `lat/lon` específicas.")
+                
+                df_map = pd.DataFrame({"lat": [lat], "lon": [lon]})
+                st.map(df_map, zoom=11)
+
+            # 3. PESTAÑA DATOS Y CALIDAD
+            with tab_datos:
+                col_tab1, col_tab2 = st.columns([2, 1])
+
+                with col_tab1:
+                    st.subheader("Tabla de Registros")
+                    st.dataframe(df, use_container_width=True, height=350)
+
+                with col_tab2:
+                    st.subheader("Informe de Calidad")
+                    st.markdown(f"""
+                        * **Huecos de reporte:** `{huecos}`
+                        * **Anomalías / Outliers:** `{n_outliers}` de `{len(df)}` lecturas
+                        * **Cálculo:** Ponderación 70% completitud temporal + 30% filtro IQR.
+                    """)
+                    
+                    csv = df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        label="⬇️ Descargar archivo CSV",
+                        data=csv,
+                        file_name=f"estacion_{codigo_estacion}_{fecha_desde}_al_{fecha_hasta}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+
 else:
-    st.info("Ajusta los parámetros en el sidebar y presiona **Consultar**.")
+    st.info("👈 Selecciona los parámetros en la barra lateral y presiona el botón **Consultar Datos**.")
