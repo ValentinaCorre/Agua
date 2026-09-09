@@ -7,7 +7,6 @@ import requests
 import pandas as pd
 import numpy as np
 import streamlit as st
-import plotly.graph_objects as go
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
