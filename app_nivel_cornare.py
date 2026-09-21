@@ -96,7 +96,7 @@ CANDIDATOS_LON = ["lng", "lon", "longitude", "longitud"]
 
 
 # ------------------------------------------------------------------
-# Funciones de consulta y procesamiento (Lógica Original Conservada)
+# Funciones de consulta y procesamiento
 # ------------------------------------------------------------------
 def obtener_serie_nivel(codigo_estacion, desde, hasta, calidad=1, timeout=30):
     url = f"{API_BASE_URL}/{codigo_estacion}/nivel"
@@ -206,8 +206,6 @@ with col_head1:
     """, unsafe_allow_html=True)
 
 with col_head2:
-    # AQUÍ PUEDES REEMPLAZAR LA URL POR LA RUTA LOCAL DE TU IMAGEN O LOGO
-    # Ejemplo con archivo local: st.image("logo_estacion.png", use_container_width=True)
     st.image(
         "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=500&q=80",
         caption="Monitoreo Cuenca San Carlos",
@@ -287,12 +285,17 @@ if consultar:
             # --- SECCIONES PESTAÑAS (TABS) ---
             tab_grafico, tab_mapa, tab_datos = st.tabs(["📈 Serie de Nivel Interactivas", "📍 Ubicación Geográfica", "📋 Datos Crudos y Exportación"])
 
-          # 1. PESTAÑA GRÁFICO NATIVO
-with tab_grafico:
-    st.subheader("Serie temporal de nivel de agua")
-    st.line_chart(df.set_index("fecha")["nivel"], color="#00D2FF")
-    
-            
+            # 1. PESTAÑA GRÁFICO INTERACTIVO
+            with tab_grafico:
+                st.subheader("Serie temporal de nivel de agua")
+                
+                # Creación del gráfico con Plotly
+                fig = go.Figure(data=go.Scatter(
+                    x=df["fecha"],
+                    y=df["nivel"],
+                    mode="lines",
+                    name="Nivel (cm)",
+                    line=dict(color="#00D2FF", width=2)
                 ))
 
                 fig.update_layout(
