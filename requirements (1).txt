@@ -1,6 +1,6 @@
 streamlit
+requests
 pandas
 numpy
-requests
 urllib3
 plotly
